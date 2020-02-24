@@ -25,7 +25,7 @@
 
 ///////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////
-// Function Prototypes
+// Function Prototypes and Module Variables
 ///////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////
 void eventCheck();
@@ -39,8 +39,40 @@ static uint16_t VOLTAGE_TOGGLE_FREQ = 128;
 uint8_t isIRDetected = false;
 void DEBUG_printStuff();
 
+void handleOrientation();
+void handleDriveFwd();
+void handleDriveRev();
+void handleWallPush();
+void handleTurnCW();
+void handleTurnCCW();
+void handleStop();
+    // case STATE_ORIENT:
+    //   handleOrientation();
+    //   break;
+    // case STATE_DRIVE_FWD:
+    //   handleDriveFwd();
+    //   break;
+    // case STATE_DRIVE_REV:
+    //   handleDriveRev();
+    //   break;
+    // case STATE_PUSHING_WALL:
+    //   handleWallPush();
+    //   break;
+    // case STATE_TURN_CW:
+    //   handleTurnCW();
+    //   break;
+    // case STATE_TURN_CCW:
+    //   handleTurnCCW();
+    //   break;
+    // case STATE_STOPPED:
+    //   handleStop();
+    //   break;
+
+
 IntervalTimer IRDetectionTimer;
 IntervalTimer DEBUG_PrintDelayTimer;
+
+States_t state;
 
 ///////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////
@@ -48,9 +80,10 @@ IntervalTimer DEBUG_PrintDelayTimer;
 ///////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////
 // TODO: Update this with our actual states
-// typedef enum {
-//   STATE_MOVE_FORWARD, STATE_MOVE_BACKWARD, STATE_STOPPED, STATE_TURN_RIGHT
-// } States_t;
+typedef enum {
+  STATE_ORIENT, STATE_DRIVE_FWD, STATE_DRIVE_REV, STATE_TURN_CW,
+  STATE_TURN_CCW, STATE_STOPPED, STATE_PUSHING_WALL
+} States_t;
 
 
 ///////////////////////////////////////////////////////
@@ -59,6 +92,9 @@ IntervalTimer DEBUG_PrintDelayTimer;
 ///////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////
 void setup() {
+  // Initialize the state to orientation
+  state = STATE_ORIENT;
+
   // Start timers
   IRDetectionTimer.begin(IRTimerExp, IR_SIGNAL_INTERVAL);
   DEBUG_PrintDelayTimer.begin(DEBUG_printStuff, 100000);
@@ -78,8 +114,6 @@ void setup() {
   // Sensor Pins
   pinMode(PIN_IR, INPUT);
 
-
-
 }
 
 
@@ -88,8 +122,31 @@ void loop() {
 
   // TODO: State machine logic goes in here
 
-  // Serial.println(analogRead(PIN_IR));
   eventCheck();
+
+  switch(state) {
+    case STATE_ORIENT:
+      handleOrientation();
+      break;
+    case STATE_DRIVE_FWD:
+      handleDriveFwd();
+      break;
+    case STATE_DRIVE_REV:
+      handleDriveRev();
+      break;
+    case STATE_PUSHING_WALL:
+      handleWallPush();
+      break;
+    case STATE_TURN_CW:
+      handleTurnCW();
+      break;
+    case STATE_TURN_CCW:
+      handleTurnCCW();
+      break;
+    case STATE_STOPPED:
+      handleStop();
+      break;
+  }
 
 }
 
@@ -103,14 +160,25 @@ void eventCheck() {
   if (TestForKey()) keyPressResp();
 }
 
+void handleOrientation() {
+}
 
-bool TestForKey() {
-  static bool KeyEventOccurred = false;
-  KeyEventOccurred = Serial.available();
-  while (Serial.available()) {
-    Serial.read();
-  }
-  return KeyEventOccurred;
+void handleDriveFwd() {
+}
+
+void handleDriveRev() {
+}
+
+void handleDriveCW() {
+}
+
+void handleDriveCCW() {
+}
+
+void handleWallPush() {
+}
+
+void handleStop() {
 }
 
 
@@ -141,16 +209,6 @@ void IRTurnedOff(){
 }
 
 
-void keyPressResp() {
-  static uint8_t MOTOR_DIRECTION = HIGH;
-  if (MOTOR_DIRECTION == HIGH) {
-    MOTOR_DIRECTION = LOW;
-    digitalWrite(MOTOR_DIR_PIN, MOTOR_DIRECTION);
-  } else {
-    MOTOR_DIRECTION = HIGH;
-    digitalWrite(MOTOR_DIR_PIN, MOTOR_DIRECTION);
-  }
-}
 
 /* DEBUG FUNCTION: This function is triggered by PrintDelayTimer 
 so that test outputs can be printed to the serial monitor at a configurable rate
