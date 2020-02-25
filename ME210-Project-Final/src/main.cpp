@@ -1,5 +1,13 @@
 ///////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////
+// Notes
+///////////////////////////////////////////////////////
+///////////////////////////////////////////////////////
+// Encoders read 341.2 counts per full revolution of the gearbox output shaft
+// When driving motors, DO NOT MIX DIGITAL AND ANALOG WRITE COMMANDS!
+
+///////////////////////////////////////////////////////
+///////////////////////////////////////////////////////
 // INCLUDES
 ///////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////
@@ -21,6 +29,16 @@
 
 // Other Constants
 #define IR_SIGNAL_INTERVAL 1000
+
+///////////////////////////////////////////////////////
+///////////////////////////////////////////////////////
+// State Definitions
+///////////////////////////////////////////////////////
+///////////////////////////////////////////////////////
+typedef enum {
+  STATE_ORIENT, STATE_DRIVE_FWD, STATE_DRIVE_REV, STATE_TURN_CW,
+  STATE_TURN_CCW, STATE_STOPPED, STATE_PUSHING_WALL
+} States_t;
 
 
 ///////////////////////////////////////////////////////
@@ -46,27 +64,6 @@ void handleWallPush();
 void handleTurnCW();
 void handleTurnCCW();
 void handleStop();
-    // case STATE_ORIENT:
-    //   handleOrientation();
-    //   break;
-    // case STATE_DRIVE_FWD:
-    //   handleDriveFwd();
-    //   break;
-    // case STATE_DRIVE_REV:
-    //   handleDriveRev();
-    //   break;
-    // case STATE_PUSHING_WALL:
-    //   handleWallPush();
-    //   break;
-    // case STATE_TURN_CW:
-    //   handleTurnCW();
-    //   break;
-    // case STATE_TURN_CCW:
-    //   handleTurnCCW();
-    //   break;
-    // case STATE_STOPPED:
-    //   handleStop();
-    //   break;
 
 
 IntervalTimer IRDetectionTimer;
@@ -74,21 +71,11 @@ IntervalTimer DEBUG_PrintDelayTimer;
 
 States_t state;
 
-///////////////////////////////////////////////////////
-///////////////////////////////////////////////////////
-// State Definitions
-///////////////////////////////////////////////////////
-///////////////////////////////////////////////////////
-// TODO: Update this with our actual states
-typedef enum {
-  STATE_ORIENT, STATE_DRIVE_FWD, STATE_DRIVE_REV, STATE_TURN_CW,
-  STATE_TURN_CCW, STATE_STOPPED, STATE_PUSHING_WALL
-} States_t;
 
 
 ///////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////
-// Function Implementations
+// Core Function Implementations
 ///////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////
 void setup() {
@@ -150,8 +137,37 @@ void loop() {
 
 }
 
+///////////////////////////////////////////////////////
+///////////////////////////////////////////////////////
+// Module Function Implementations
+///////////////////////////////////////////////////////
+///////////////////////////////////////////////////////
 
-/* Event-Checking function used in loop. 
+/* Helper functions for driving motors. 
+Accepts a speed in the range of -255-255 (as per 
+limits on the analogWrite command for PWM signal generation) 
+and drives a motor at that speed. If the argument is negative it drives 
+in the opposite direction */
+// TODO: Replace this with two functions for L/R motors
+void setMotorSpeed(int16_t speed) {
+
+  if (speed == 0) {
+    analogWrite(IN1, 0);
+    analogWrite(IN2, 0);
+  }
+  else if (speed < 0) {
+    analogWrite(IN1, 0);
+    analogWrite(IN2, -1*speed);
+  }
+  else {
+    analogWrite(IN1, speed);
+    analogWrite(IN2, 0);
+  }
+}
+
+
+
+/* Universal Event-Checking function used in loop. 
 Tests conditionals implemented in separate functions, which in turn
 trigger callbacks to provide services to events */
 void eventCheck() {
