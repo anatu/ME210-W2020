@@ -3,10 +3,16 @@
 
 #define IR_SENSE_INTERVAL 2000000
 
-int IN1 = 10;
-int IN2 = 6;
+// Left Motor
+int IN1 = 3;
+int IN2 = 4;
 int ENC_A = 1;
 int ENC_B = 2;
+
+// Motor 2
+int IN3 = 23;
+int IN4 = 22;
+
 int IR_PIN = A2;
 int LED_PIN = 5;
 
@@ -14,7 +20,8 @@ volatile unsigned long edgeCounter = 0;
 volatile unsigned long edgeCounterRev = 0;
 
 void countRisingEdges();
-void setMotorSpeed(int16_t);
+void setLeftMotorSpeed(int16_t);
+void setRightMotorSpeed(int16_t);
 void stopMotor();
 void checkEvents();
 void timerDoneResp();
@@ -32,6 +39,9 @@ void setup() {
   pinMode(IN1, OUTPUT);
   pinMode(IN2, OUTPUT);
 
+  pinMode(IN3, OUTPUT);
+  pinMode(IN4, OUTPUT);
+
   pinMode(ENC_A, INPUT);
   pinMode(ENC_B, INPUT);
 
@@ -41,10 +51,11 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(ENC_A), countRisingEdges, RISING);
   attachInterrupt(digitalPinToInterrupt(ENC_B), countRisingEdges, RISING);
 
-  LEDTimer.begin(toggleOutput, 500);
-  IRDetectionTimer.begin(IRTimerExp, IR_SENSE_INTERVAL);
+  // LEDTimer.begin(toggleOutput, 500);
+  // IRDetectionTimer.begin(IRTimerExp, IR_SENSE_INTERVAL);
 
-  setMotorSpeed(100);
+  setLeftMotorSpeed(150);
+  setRightMotorSpeed(150);
 
   // myTimer.begin(stopMotor, 5000000);
 }
@@ -71,7 +82,7 @@ bool TestForIR(){
 void IRResp(){
   if (isIRDetected == false) {
     Serial.println("IR DETECTED!");
-    setMotorSpeed(150);
+    // setMotorSpeed(150);
     isIRDetected = true;
     edgeCounter = 0;
   }
@@ -86,7 +97,7 @@ void IRTimerExp() {
   Serial.println(edgeCounter);
   edgeCounterRev = edgeCounter / 2;
   edgeCounter = 0;
-  setMotorSpeed(-150);
+  // setMotorSpeed(-150);
   }
 }
 
@@ -104,7 +115,7 @@ void timerDoneResp() {
   if (edgeCounter >= edgeCounterRev) {
     // digitalWrite(IN1, LOW);
     // analogWrite(IN2, 0);
-    setMotorSpeed(0);
+    // setMotorSpeed(0);
     timerDone = false;
     Serial.println(edgeCounter);
   }
@@ -115,7 +126,7 @@ Accepts a speed in the range of -255-255 (as per
 limits on the analogWrite command for PWM signal generation) 
 and drives a motor at that speed. If the argument is negative it drives 
 in the opposite direction */
-void setMotorSpeed(int16_t speed) {
+void setLeftMotorSpeed(int16_t speed) {
 
   if (speed == 0) {
     analogWrite(IN1, 0);
@@ -131,9 +142,25 @@ void setMotorSpeed(int16_t speed) {
   }
 }
 
+void setRightMotorSpeed(int16_t speed) {
+
+  if (speed == 0) {
+    analogWrite(IN3, 0);
+    analogWrite(IN4, 0);
+  }
+  else if (speed < 0) {
+    analogWrite(IN3, 0);
+    analogWrite(IN4, -1*speed);
+  }
+  else {
+    analogWrite(IN3, speed);
+    analogWrite(IN4, 0);
+  }
+}
+
 void stopMotor() {
-  setMotorSpeed(0);
-  setMotorSpeed(100);
+  // setMotorSpeed(0);
+  // setMotorSpeed(100);
 
   myTimer.end();
   edgeCounterRev = edgeCounter / 2;
