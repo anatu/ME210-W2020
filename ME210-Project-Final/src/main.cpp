@@ -20,15 +20,28 @@
 ///////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////
 // Pin Numbers
-#define PIN_SIGNAL_IN 7
-#define MOTOR_PWM_PIN 4
-#define MOTOR_DIR_PIN 3
-#define PIN_MOTOR_ENC_A 9
-#define PIN_MOTOR_ENC_B 10
-#define PIN_IR A3
+// TODO: Fill these out!
+// Left Motor Pins
+#define P_LMOTOR_IN1
+#define P_LMOTOR_IN2
+#define P_LMOTOR_ENC_A 
+#define P_LMOTOR_ENC_B
+
+// Right Motor Pins
+#define P_RMOTOR_IN1
+#define P_RMOTOR_IN2
+#define P_RMOTOR_ENC_A 
+#define P_RMOTOR_ENC_B
+
+// Sensor Pins
+#define P_IR_SENSOR A3
+#define P_L_LINE_SENSOR
+#define P_C_LINE_SENSOR
+#define P_R_LINE_SENSOR
 
 // Other Constants
-#define IR_SIGNAL_INTERVAL 1000
+// Sensing interval for the IR sensor
+#define IR_SIGNAL_INTERVAL 1000000
 
 ///////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////
@@ -86,20 +99,30 @@ void setup() {
   IRDetectionTimer.begin(IRTimerExp, IR_SIGNAL_INTERVAL);
   DEBUG_PrintDelayTimer.begin(DEBUG_printStuff, 100000);
 
-  // Set the modes of the pins we are using 
-  // Motor Voltage-Driving Pins
-  pinMode(MOTOR_PWM_PIN, OUTPUT);
-  analogWrite(MOTOR_PWM_PIN, VOLTAGE_TOGGLE_FREQ);
 
-  // Motor Direction Pins
-  pinMode(MOTOR_DIR_PIN, OUTPUT);
-  digitalWrite(MOTOR_DIR_PIN, HIGH);
+  // Pin Settings
+  // Motor PWM Pins
+  pinMode(P_LMOTOR_IN1, OUTPUT);
+  pinMode(P_LMOTOR_IN2, OUTPUT);
+  pinMode(P_RMOTOR_IN1, OUTPUT);
+  pinMode(P_RMOTOR_IN2, OUTPUT);
 
   // Motor Encoder Pins
+  pinMode(P_LMOTOR_ENC_A, INPUT);
+  pinMode(P_LMOTOR_ENC_B, INPUT);
+  pinMode(P_RMOTOR_ENC_A, INPUT);
+  pinMode(P_RMOTOR_ENC_B, INPUT);
 
 
   // Sensor Pins
-  pinMode(PIN_IR, INPUT);
+  pinMode(P_IR_SENSOR, INPUT);
+  pinMode(P_L_LINE_SENSOR, INPUT);
+  pinMode(P_R_LINE_SENSOR, INPUT);
+  pinMode(P_C_LINE_SENSOR, INPUT);
+
+
+  // Initialize our state to the orientation pass
+  state = STATE_ORIENT;
 
 }
 
@@ -148,8 +171,7 @@ Accepts a speed in the range of -255-255 (as per
 limits on the analogWrite command for PWM signal generation) 
 and drives a motor at that speed. If the argument is negative it drives 
 in the opposite direction */
-// TODO: Replace this with two functions for L/R motors
-void setMotorSpeed(int16_t speed) {
+void setLeftMotorSpeed(int16_t speed) {
 
   if (speed == 0) {
     analogWrite(IN1, 0);
@@ -162,6 +184,22 @@ void setMotorSpeed(int16_t speed) {
   else {
     analogWrite(IN1, speed);
     analogWrite(IN2, 0);
+  }
+}
+
+void setRightMotorSpeed(int16_t speed) {
+
+  if (speed == 0) {
+    analogWrite(IN3, 0);
+    analogWrite(IN4, 0);
+  }
+  else if (speed < 0) {
+    analogWrite(IN3, 0);
+    analogWrite(IN4, -1*speed);
+  }
+  else {
+    analogWrite(IN3, speed);
+    analogWrite(IN4, 0);
   }
 }
 
