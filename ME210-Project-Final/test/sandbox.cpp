@@ -4,14 +4,14 @@
 #define IR_SENSE_INTERVAL 2000000
 
 // Left Motor
-int IN1 = 3;
-int IN2 = 4;
+int IN1 = 4;
+int IN2 = 3;
 int ENC_A = 1;
 int ENC_B = 2;
 
 // Motor 2
-int IN3 = 23;
-int IN4 = 22;
+int IN3 = 22;
+int IN4 = 23;
 
 int IR_PIN = A2;
 int LED_PIN = 5;
@@ -54,8 +54,8 @@ void setup() {
   // LEDTimer.begin(toggleOutput, 500);
   // IRDetectionTimer.begin(IRTimerExp, IR_SENSE_INTERVAL);
 
-  setLeftMotorSpeed(150);
-  setRightMotorSpeed(150);
+  setLeftMotorSpeed(200);
+  setRightMotorSpeed(200);
 
   // myTimer.begin(stopMotor, 5000000);
 }

@@ -4,7 +4,11 @@
 ///////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////
 // Encoders read 341.2 counts per full revolution of the gearbox output shaft
-// When driving motors, DO NOT MIX DIGITAL AND ANALOG WRITE COMMANDS!
+
+// When driving motors, DO NOT MIX DIGITAL AND ANALOG WRITE COMMANDS! Everything should be analog.
+// If you need to write digital low to a motor pin just analogWrite 0.
+
+
 
 ///////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////
@@ -42,6 +46,8 @@
 // Other Constants
 // Sensing interval for the IR sensor
 #define IR_SIGNAL_INTERVAL 1000000
+// Global 2:10 stopping timer
+#define GLOBAL_TIME_STOP_INTERVAL 130000000
 
 ///////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////
@@ -89,6 +95,7 @@ uint8_t isIRDetected = false;
 
 IntervalTimer IRDetectionTimer;
 IntervalTimer DEBUG_PrintDelayTimer;
+IntervalTimer GlobalStopTimer;
 
 
 
@@ -103,6 +110,7 @@ void setup() {
 
   // Timers
   IRDetectionTimer.begin(IRTimerExp, IR_SIGNAL_INTERVAL);
+  GlobalStopTimer.begin(GlobalStop, GLOBAL_TIME_STOP_INTERVAL);
   DEBUG_PrintDelayTimer.begin(DEBUG_printStuff, 100000);
 
   // Pin Settings
@@ -179,7 +187,7 @@ void loop() {
 /* Helper functions for driving motors. 
 Accepts a speed in the range of -255-255 (as per 
 limits on the analogWrite command for PWM signal generation) 
-and drives a motor at that speed. If the argument is negative it drives 
+and drives the motor at that speed. If the argument is negative it drives 
 in the opposite direction */
 void setLeftMotorSpeed(int16_t speed) {
 
@@ -223,6 +231,8 @@ void eventCheck() {
   else Serial.println("NOT DETECTED!!!!");
   if (TestForKey()) keyPressResp();
 }
+
+
 
 void handleOrientation() {
   /* Handles the initial orientation pass where we
@@ -277,8 +287,15 @@ bool TestForIR(){
 }
 
 void IRResp(){
-  Serial.println("IR DETECTED!");
-  // isIRDetected = true;
+  // If event takes place, print to Serial monitor
+  // TODO: Start counting encoders here
+  if (!is IRDetected) {
+    isIRDetected = true;
+    Serial.println("IR DETECTED!");
+  }
+
+  // Reset the timer which runs for the interval after which we consider
+  // the IR beacon to be out of sensing range.
   // IRDetectionTimer.end();
   // IRDetectionTimer.begin(IRTimerExp, IR_SIGNAL_INTERVAL);
 }
@@ -291,8 +308,22 @@ void IRTimerExp(){
 
 
 void IRDetectionEnded(){
-  // DO SHIT WITH MOTOR
-  Serial.println("IR NOT DETECTED");
+  /* Once the IR beacon falls out of range, we must 
+  perform the "backwards pass" where we calculate the encoder 
+  midpoint, and drive the motors in reverse orientation to recover
+  the radial midpoint of the region where the IR signal was detected. 
+  TODO: Consider using another boolean variable (e.g. isCorrecting) or another
+  state altogether so the effect of sensing the IR beacon doesn't interfere
+  when we are turning to this midpoint. */
+  Serial.println("IR NOT DETECTED!");
+}
+
+void GlobalStop() {
+  /* Callback function to force the stop state 
+  after the 2:10 universal time limit has elapsed. 
+  The stop state handling logic will stop the motors directly. */
+  state = STATE_STOPPED;
+  GlobalStopTimer.end();
 }
 
 
