@@ -259,6 +259,9 @@ void handleDriveCCW() {
 }
 
 void handleWallPush() {
+  /* Handles pushing the wall. TODO: Still need to figure out a) whether
+  we want sensing to detect the walls at all, and b) whether we need this
+  state at all or we just want to set timers */
 }
 
 void handleStop() {
@@ -269,7 +272,7 @@ void handleStop() {
 
 
 bool TestForIR(){
-  // is it over some threshold, e.g. 100MV?
+  // Tests if the IR signal is high enough to count as being "detected"
   return analogRead(P_IR_SENSOR) >= 300;
 }
 
