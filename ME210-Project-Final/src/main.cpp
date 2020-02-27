@@ -59,16 +59,18 @@ typedef enum {
 // Function Prototypes and Module Variables
 ///////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////
+// Function prototypes
 void eventCheck();
-bool TestForKey();
-void keyPressResp();
+
 bool TestForIR();
 void IRResp();
 void IRTimerExp();
-void IRTurnedOff();
-static uint16_t VOLTAGE_TOGGLE_FREQ = 128;
-uint8_t isIRDetected = false;
-void DEBUG_printStuff();
+void IRDetectionEnded();
+
+
+void setLeftMotorSpeed(int16_t);
+void setRightMotorSpeed(int16_t);
+
 
 void handleOrientation();
 void handleDriveFwd();
@@ -78,11 +80,15 @@ void handleTurnCW();
 void handleTurnCCW();
 void handleStop();
 
+void DEBUG_printStuff();
+
+// Module variables
+States_t state;
+
+uint8_t isIRDetected = false;
 
 IntervalTimer IRDetectionTimer;
 IntervalTimer DEBUG_PrintDelayTimer;
-
-States_t state;
 
 
 
@@ -95,10 +101,9 @@ void setup() {
   // Initialize the state to orientation
   state = STATE_ORIENT;
 
-  // Start timers
+  // Timers
   IRDetectionTimer.begin(IRTimerExp, IR_SIGNAL_INTERVAL);
   DEBUG_PrintDelayTimer.begin(DEBUG_printStuff, 100000);
-
 
   // Pin Settings
   // Motor PWM Pins
@@ -113,6 +118,11 @@ void setup() {
   pinMode(P_RMOTOR_ENC_A, INPUT);
   pinMode(P_RMOTOR_ENC_B, INPUT);
 
+  // Motor Encoder Pin Interrupts
+  attachInterrupt(digitalPinToInterrupt(P_LMOTOR_ENC_A), countRisingEdges, RISING);
+  attachInterrupt(digitalPinToInterrupt(P_LMOTOR_ENC_B), countRisingEdges, RISING);
+  attachInterrupt(digitalPinToInterrupt(P_RMOTOR_ENC_A), countRisingEdges, RISING);
+  attachInterrupt(digitalPinToInterrupt(P_RMOTOR_ENC_B), countRisingEdges, RISING);
 
   // Sensor Pins
   pinMode(P_IR_SENSOR, INPUT);
@@ -215,33 +225,53 @@ void eventCheck() {
 }
 
 void handleOrientation() {
+  /* Handles the initial orientation pass where we
+  center the robot around the IR beacon in our section of the arena.
+  Strategy: Rotate until IR is detected, start encoders, keep rotating until IR is no
+  longer detected, end encoder count, and reverse turn to half the encoder count so the robot
+  is centered in the position between where the IR signal starts and stops being detected.
+
+  For the edge case where we start in a position where the IR sensor is already in view, we 
+  can either (1) turn until we don't see it, and do the orientation pass normally, or (2) if we
+  are confident of the angular error of our pickup signal, simply start at localized and go from there
+  (i.e. if we are fairly sure that the IR signal is only detected when the sensor is nearly directly facing the beacon) */
+
 }
 
 void handleDriveFwd() {
+  /* Handles driving forward. Should just set left and right
+  motor speeds to some equal value of speed. Need to calibrate this online */
 }
 
 void handleDriveRev() {
+  /* Handles driving Backward. Should just set left and right
+  motor speeds to some equal value of speed. Need to calibrate this online */
 }
 
 void handleDriveCW() {
+  /* Handles driving Clockwise. Should be done by setting left motor
+  faster than right to steer differentially. Needs online calibration */
 }
 
 void handleDriveCCW() {
+  /* Handles driving Counter-Clockwise. Should be done by setting right motor
+  faster than left to steer differentially. Needs online calibration */
 }
 
 void handleWallPush() {
 }
 
 void handleStop() {
+  /* Handles the stopped state. Simply turn both motors off */
+  setLeftMotorSpeed(0);
+  setRightMotorSpeed(0);
 }
 
 
 bool TestForIR(){
   // is it over some threshold, e.g. 100MV?
-  return analogRead(PIN_IR) >= 300;
+  return analogRead(P_IR_SENSOR) >= 300;
 }
-
-
 
 void IRResp(){
   Serial.println("IR DETECTED!");
@@ -252,14 +282,14 @@ void IRResp(){
 
 
 void IRTimerExp(){
-  if (isIRDetected) IRTurnedOff(); 
+  if (isIRDetected) IRDetectionEnded(); 
   isIRDetected = false;
 }
 
 
-void IRTurnedOff(){
+void IRDetectionEnded(){
   // DO SHIT WITH MOTOR
-  Serial.println("THE LIGHT HAS BEEN TURNED OFF!! :D");
+  Serial.println("IR NOT DETECTED");
 }
 
 
