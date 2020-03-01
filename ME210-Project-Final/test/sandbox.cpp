@@ -14,6 +14,8 @@ int IN3 = 22;
 int IN4 = 23;
 
 int IR_PIN = A2;
+int LINE_PIN_OUTER = 11;
+int LINE_PIN_INNER = 12;
 int LED_PIN = 5;
 
 volatile unsigned long edgeCounter = 0;
@@ -29,10 +31,21 @@ bool TestForIR();
 void IRResp();
 void IRTimerExp();
 void toggleOutput();
+//bool lineDetected();
+void LineResp();
+void goForward();
+
+void innerLineResp();
+bool outerLineDetected();
+bool innerLineDetected();
+
+
+
 bool isIRDetected = false;
 IntervalTimer myTimer;
 IntervalTimer LEDTimer;
 IntervalTimer IRDetectionTimer;
+IntervalTimer LineDetectionTimer;
 bool timerDone = false;
 
 void setup() {
@@ -47,15 +60,18 @@ void setup() {
 
   pinMode(IR_PIN, INPUT);
   pinMode(LED_PIN, OUTPUT);
+
+  pinMode(LINE_PIN_OUTER, INPUT);
+  pinMode(LINE_PIN_INNER, INPUT);
   // put your setup code here, to run once:
   attachInterrupt(digitalPinToInterrupt(ENC_A), countRisingEdges, RISING);
   attachInterrupt(digitalPinToInterrupt(ENC_B), countRisingEdges, RISING);
 
   // LEDTimer.begin(toggleOutput, 500);
   // IRDetectionTimer.begin(IRTimerExp, IR_SENSE_INTERVAL);
-
-  setLeftMotorSpeed(200);
-  setRightMotorSpeed(200);
+  delay(500);
+  setLeftMotorSpeed(255);
+  setRightMotorSpeed(-255);
 
   // myTimer.begin(stopMotor, 5000000);
 }
@@ -65,21 +81,78 @@ void loop() {
   // Serial.println(edgeCounter);
 
   checkEvents();
+  //Serial.println(digitalRead(LINE_PIN_INNER));
+  Serial.println(analogRead(IR_PIN));
 }
 
 
 void checkEvents() {
   if (TestForIR()) IRResp();
-  // if (timerDone) timerDoneResp();
+
+  //if (outerLineDetected()==0 && innerLineDetected()==0) goForward();
+  //if (outerLineDetected()) LineResp();
+  //if (outerLineDetected() && innerLineDetected()) LineResp();
+  //if (innerLineDetected()==1 && outerLineDetected() == 0) innerLineResp();
+  //if (timerDone) timerDoneResp();
 }
 
+bool outerLineDetected(){
+  return digitalRead(LINE_PIN_OUTER);
+}
+
+bool innerLineDetected(){
+  return digitalRead(LINE_PIN_INNER);
+}
+
+void LineResp(){
+  //LineDetectionTimer.begin(goForward, 100000);
+  setLeftMotorSpeed(255);
+  setRightMotorSpeed(0);
+  /*if(innerLineDetected() == 0){
+    setLeftMotorSpeed(30);
+    setRightMotorSpeed(-30);
+  } else if(innerLineDetected()) {
+    setLeftMotorSpeed(30);
+    setRightMotorSpeed(-30);
+  }*/
+  
+
+
+
+}
+
+
+void innerLineResp() {
+  setLeftMotorSpeed(255);
+  setRightMotorSpeed(-150);
+  while(outerLineDetected() == 0) {
+    
+  }
+
+
+}
+
+void goForward() {
+  setRightMotorSpeed(255);
+  setLeftMotorSpeed(255);
+  //LineDetectionTimer.end();
+}
 
 bool TestForIR(){
   // is it over some threshold, e.g. 100MV?
-  return analogRead(IR_PIN) >= 300;
+  
+  if( analogRead(IR_PIN) >= 800) {
+    return 1;
+  } else{
+    return 0;
+  }
+
 }
 
 void IRResp(){
+
+  setLeftMotorSpeed(0);
+  setRightMotorSpeed(0);
   if (isIRDetected == false) {
     Serial.println("IR DETECTED!");
     // setMotorSpeed(150);
