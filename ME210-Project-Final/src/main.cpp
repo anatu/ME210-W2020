@@ -50,10 +50,10 @@
 // Global 2:10 stopping timer
 #define GLOBAL_TIME_STOP_INTERVAL 130000000
 #define FIRST_WALL_ATTACK_TIME 3000000
-#define SECOND_WALL_ATTACK_TIME 5000000
+#define SECOND_WALL_ATTACK_TIME 60000000
 
 // Nominal motor speed
-#define NOMINAL_SPEED 170
+#define NOMINAL_SPEED 240
 
 
 ///////////////////////////////////////////////////////
@@ -70,7 +70,7 @@ typedef enum {
 // Define the hierarchical (master) meta-states that we use to drive either forward or reverse navigation logic depending
 // on whether we are
 typedef enum {
-  METASTATE_ORIENT, METASTATE_FIRST_WALL, METASTATE_SECOND_WALL
+  METASTATE_ORIENT, METASTATE_FIRST_WALL, METASTATE_SECOND_WALL, METASTATE_END
 } MetaStates_t;
 
 
@@ -134,8 +134,8 @@ IntervalTimer DEBUG_PrintDelayTimer;
 void setup() {
 
   // Timers
-  GlobalStopTimer.begin(GlobalStop, GLOBAL_TIME_STOP_INTERVAL);
-  // DEBUG_PrintDelayTimer.begin(DEBUG_printStuff, 100000);
+  // GlobalStopTimer.begin(GlobalStop, GLOBAL_TIME_STOP_INTERVAL);
+  // DEBUG_PrintDelayTimer.begin(DEBUG_printStuff, 1000000);
   // DEBUG_TestTimer.begin(DEBUG_TestTimerExp, 1000000);
 
   // Pin Settings
@@ -276,32 +276,36 @@ void eventCheck() {
  
   // Forward-Movement Line Following (For attacking the first wall)
   if (metaState == METASTATE_FIRST_WALL) {
-    if (!TestInnerLine() && !TestOuterLine() && !(state == STATE_SHARP_TURN_CCW)) state = STATE_DRIVE_FWD;
-    if (!TestInnerLine() && TestOuterLine()) state = STATE_TURN_CCW;
+    if (!TestInnerLine() && !TestOuterLine()) state = STATE_DRIVE_FWD;
+    if (TestOuterLine()) state = STATE_TURN_CCW;
     if (TestInnerLine() && TestOuterLine()) state = STATE_TURN_CCW;
-    if (TestInnerLine() && !TestOuterLine()) state = STATE_SHARP_TURN_CCW;
-    if (state == STATE_SHARP_TURN_CCW && TestOuterLine()) state = STATE_DRIVE_FWD;
-
-    // if (TestOuterLine() && TestInnerLine()) state = STATE_DRIVE_FWD;
-    // if ((state == STATE_DRIVE_FWD) && TestOuterLine()) state = STATE_TURN_CCW;
-    // if (TestInnerLine() && !TestOuterLine()) state = STATE_SHARP_TURN_CCW;
-    // if (state == STATE_SHARP_TURN_CCW && (TestOuterLine())) {
-    //   state == STATE_DRIVE_FWD;
-    // }
+    if (TestInnerLine() && !TestOuterLine()) {
+      state = STATE_SHARP_TURN_CCW;
+      setRightMotorSpeed(255);
+      setLeftMotorSpeed(-150);
+      while (!TestOuterLine()) {        
+      }   
+    }
   }
   
-  // Backward-Movement Line Following (For attacking hte second wall)
+  // Backward-Movement Line Following (For attacking the second wall)
   if (metaState == METASTATE_SECOND_WALL) {
     if (TestBackLine() && (state != STATE_TURN_CW)) {
-      Serial.println("TIMER STARTED");
       state = STATE_TURN_CW;
-      //ReverseCWTimer.begin(ReverseCWTimerExp, 500000);      
       }
     
     if (state == STATE_TURN_CW){
       if (TestOuterLine()) {
         ReverseCWTimerExp();
       }
+    }
+
+    if (TestInnerLine()) {
+      setLeftMotorSpeed(255);
+      setRightMotorSpeed(255);
+      while (!TestBackLine()) {        
+      }
+      state = STATE_TURN_CW;
     }
   }
 
@@ -345,25 +349,32 @@ void IRResp(){
   setRightMotorSpeed(0);    
   state = STATE_DRIVE_FWD;
   metaState = METASTATE_FIRST_WALL;
-  FirstWallTimer.begin(FirstWallAttackTimerExp, FIRST_WALL_ATTACK_TIME);  
+  FirstWallTimer.begin(FirstWallAttackTimerExp, FIRST_WALL_ATTACK_TIME);
+  // Serial.println("TIMER BEGUN");
 }
 
 void FirstWallAttackTimerExp() {
+  // Serial.println("TIMER EXPIRED!");
   /* Once we are done attacking the first wall, switch into the second wall
   meta-state starting with reverse movement */
-  // state = STATE_DRIVE_REV;
-  // metaState = METASTATE_SECOND_WALL;
-  // // End the first wall attack timer and start the second one
-  // FirstWallTimer.end();
-  // SecondWallTimer.begin(SecondWallAttackTimerExp, SECOND_WALL_ATTACK_TIME);
-  state = STATE_STOPPED;
+  
+  if (metaState == METASTATE_FIRST_WALL) {
+    state = STATE_DRIVE_REV;
+    metaState = METASTATE_SECOND_WALL;
+    // End the first wall attack timer and start the second one
+    FirstWallTimer.end();
+    SecondWallTimer.begin(SecondWallAttackTimerExp, SECOND_WALL_ATTACK_TIME);
+  }
 }
 
 void SecondWallAttackTimerExp() {
   /* Once we are done attacking the sceond wall, stop the motors
   and terminate the timer */
-  state = STATE_STOPPED;
-  SecondWallTimer.end();
+  if (metaState == METASTATE_SECOND_WALL) {
+    state = STATE_STOPPED;
+    metaState = METASTATE_END;
+    SecondWallTimer.end();
+  }
 }
 
 
@@ -393,22 +404,22 @@ void handleOrientation() {
 void handleDriveFwd() {
   /* Handles driving forward. Should just set left and right
   motor speeds to some equal value of speed. Need to calibrate this online */
-  setLeftMotorSpeed(NOMINAL_SPEED);
-  setRightMotorSpeed(NOMINAL_SPEED);
+  setLeftMotorSpeed(NOMINAL_SPEED/1.5);
+  setRightMotorSpeed(NOMINAL_SPEED/1.5);
 }
 
 void handleDriveRev() {
   /* Handles driving Backward. Should just set left and right
   motor speeds to some equal value of speed. Need to calibrate this online */
-  setLeftMotorSpeed(NOMINAL_SPEED);
-  setRightMotorSpeed(NOMINAL_SPEED);
+  setLeftMotorSpeed(-NOMINAL_SPEED/1.5);
+  setRightMotorSpeed(-NOMINAL_SPEED/1.5);
 }
 
 void handleTurnCW() {
   /* Handles driving Clockwise. Should be done by setting left motor
   forward and right motor too zero. */
   setLeftMotorSpeed(NOMINAL_SPEED);
-  setRightMotorSpeed(0);
+  setRightMotorSpeed(40);
 }
 
 void handleSharpTurnCW() {
@@ -484,6 +495,7 @@ so that test outputs can be printed to the serial monitor at a configurable rate
 so it's easier to follow */
 void DEBUG_printStuff(){
   // Serial.println(analogRead(PIN_IR));
+  Serial.println(state);
 }
 
 void DEBUG_TestTimerExp() {
