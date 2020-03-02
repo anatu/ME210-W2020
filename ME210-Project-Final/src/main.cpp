@@ -17,6 +17,7 @@
 ///////////////////////////////////////////////////////
 
 #include <Arduino.h>
+#include <Metro.h>
 
 ///////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////
@@ -48,11 +49,11 @@
 // #define IR_SIGNAL_INTERVAL 1000000
 // Global 2:10 stopping timer
 #define GLOBAL_TIME_STOP_INTERVAL 130000000
-#define FIRST_WALL_ATTACK_TIME 10000000
-#define SECOND_WALL_ATTACK_TIME 10000000
+#define FIRST_WALL_ATTACK_TIME 3000000
+#define SECOND_WALL_ATTACK_TIME 5000000
 
 // Nominal motor speed
-#define NOMINAL_SPEED 250
+#define NOMINAL_SPEED 170
 
 
 ///////////////////////////////////////////////////////
@@ -111,6 +112,7 @@ void SecondWallAttackTimerExp();
 void GlobalStop();
 
 void DEBUG_printStuff();
+void DEBUG_TestTimerExp();
 
 // Module variables
 States_t state;
@@ -118,13 +120,11 @@ MetaStates_t metaState;
 
 uint8_t isIRDetected = false;
 
-IntervalTimer DEBUG_PrintDelayTimer;
 IntervalTimer GlobalStopTimer;
-IntervalTimer ReverseCWTimer;
-
 IntervalTimer FirstWallTimer;
 IntervalTimer SecondWallTimer;
-
+IntervalTimer DEBUG_TestTimer;
+IntervalTimer DEBUG_PrintDelayTimer;
 
 ///////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////
@@ -135,7 +135,8 @@ void setup() {
 
   // Timers
   GlobalStopTimer.begin(GlobalStop, GLOBAL_TIME_STOP_INTERVAL);
-  DEBUG_PrintDelayTimer.begin(DEBUG_printStuff, 100000);
+  // DEBUG_PrintDelayTimer.begin(DEBUG_printStuff, 100000);
+  // DEBUG_TestTimer.begin(DEBUG_TestTimerExp, 1000000);
 
   // Pin Settings
   // Motor PWM Pins
@@ -275,9 +276,18 @@ void eventCheck() {
  
   // Forward-Movement Line Following (For attacking the first wall)
   if (metaState == METASTATE_FIRST_WALL) {
-    if (TestOuterLine() && TestInnerLine()) state = STATE_DRIVE_FWD;
-    if (TestOuterLine()) state = STATE_TURN_CCW;
+    if (!TestInnerLine() && !TestOuterLine() && !(state == STATE_SHARP_TURN_CCW)) state = STATE_DRIVE_FWD;
+    if (!TestInnerLine() && TestOuterLine()) state = STATE_TURN_CCW;
+    if (TestInnerLine() && TestOuterLine()) state = STATE_TURN_CCW;
     if (TestInnerLine() && !TestOuterLine()) state = STATE_SHARP_TURN_CCW;
+    if (state == STATE_SHARP_TURN_CCW && TestOuterLine()) state = STATE_DRIVE_FWD;
+
+    // if (TestOuterLine() && TestInnerLine()) state = STATE_DRIVE_FWD;
+    // if ((state == STATE_DRIVE_FWD) && TestOuterLine()) state = STATE_TURN_CCW;
+    // if (TestInnerLine() && !TestOuterLine()) state = STATE_SHARP_TURN_CCW;
+    // if (state == STATE_SHARP_TURN_CCW && (TestOuterLine())) {
+    //   state == STATE_DRIVE_FWD;
+    // }
   }
   
   // Backward-Movement Line Following (For attacking hte second wall)
@@ -341,11 +351,12 @@ void IRResp(){
 void FirstWallAttackTimerExp() {
   /* Once we are done attacking the first wall, switch into the second wall
   meta-state starting with reverse movement */
-  state = STATE_DRIVE_REV;
-  metaState = METASTATE_SECOND_WALL;
-  // End the first wall attack timer and start the second one
-  FirstWallTimer.end();
-  SecondWallTimer.begin(SecondWallAttackTimerExp, SECOND_WALL_ATTACK_TIME);
+  // state = STATE_DRIVE_REV;
+  // metaState = METASTATE_SECOND_WALL;
+  // // End the first wall attack timer and start the second one
+  // FirstWallTimer.end();
+  // SecondWallTimer.begin(SecondWallAttackTimerExp, SECOND_WALL_ATTACK_TIME);
+  state = STATE_STOPPED;
 }
 
 void SecondWallAttackTimerExp() {
@@ -410,15 +421,15 @@ void handleSharpTurnCW() {
 void handleTurnCCW() {
   /* Handles driving Counter-Clockwise. Should be done by setting right motor
   forward and left motor in reverse. */
-  setLeftMotorSpeed(-NOMINAL_SPEED);
-  setRightMotorSpeed(0);
+  setLeftMotorSpeed(0);
+  setRightMotorSpeed(NOMINAL_SPEED);
 }
 
 void handleSharpTurnCCW() {
   /* Handles SHARP driving Counter-Clockwise. Should be done by setting left motor
   forward and right motor in reverse. */
-  setLeftMotorSpeed(-NOMINAL_SPEED);
-  setRightMotorSpeed(NOMINAL_SPEED/2);
+  setLeftMotorSpeed(-NOMINAL_SPEED/2);
+  setRightMotorSpeed(NOMINAL_SPEED);
 }
 
 
@@ -473,4 +484,8 @@ so that test outputs can be printed to the serial monitor at a configurable rate
 so it's easier to follow */
 void DEBUG_printStuff(){
   // Serial.println(analogRead(PIN_IR));
+}
+
+void DEBUG_TestTimerExp() {
+  Serial.println("INTERVAL EXPIRED!");
 }
