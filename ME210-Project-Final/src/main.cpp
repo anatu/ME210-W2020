@@ -26,28 +26,32 @@
 // Pin Numbers
 // TODO: Fill these out!
 // Left Motor Pins
-#define P_LMOTOR_IN1
-#define P_LMOTOR_IN2
-#define P_LMOTOR_ENC_A 
-#define P_LMOTOR_ENC_B
+#define P_LMOTOR_IN1 22
+#define P_LMOTOR_IN2 23
+#define P_LMOTOR_ENC_A 1 
+#define P_LMOTOR_ENC_B 2
 
 // Right Motor Pins
-#define P_RMOTOR_IN1
-#define P_RMOTOR_IN2
-#define P_RMOTOR_ENC_A 
-#define P_RMOTOR_ENC_B
+#define P_RMOTOR_IN1 4
+#define P_RMOTOR_IN2 3
+// #define P_RMOTOR_ENC_A 
+// #define P_RMOTOR_ENC_B
 
 // Sensor Pins
-#define P_IR_SENSOR A3
-#define P_L_LINE_SENSOR
-#define P_C_LINE_SENSOR
-#define P_R_LINE_SENSOR
+#define P_IR_SENSOR A2
+#define P_LINE_OUTER 11
+#define P_LINE_INNER 12
+#define P_BACK_LINE 7
+#define P_LED 5
 
 // Other Constants
 // Sensing interval for the IR sensor
-#define IR_SIGNAL_INTERVAL 1000000
+// #define IR_SIGNAL_INTERVAL 1000000
 // Global 2:10 stopping timer
 #define GLOBAL_TIME_STOP_INTERVAL 130000000
+// Nominal motor speed
+#define NOMINAL_SPEED 250
+
 
 ///////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////
@@ -56,7 +60,7 @@
 ///////////////////////////////////////////////////////
 typedef enum {
   STATE_ORIENT, STATE_DRIVE_FWD, STATE_DRIVE_REV, STATE_TURN_CW,
-  STATE_TURN_CCW, STATE_STOPPED, STATE_PUSHING_WALL
+  STATE_SHARP_TURN_CW, STATE_TURN_CCW, STATE_SHARP_TURN_CCW, STATE_STOPPED, STATE_PUSHING_WALL
 } States_t;
 
 
@@ -73,6 +77,9 @@ void IRResp();
 void IRTimerExp();
 void IRDetectionEnded();
 
+bool TestOuterLine();
+bool TestInnerLine();
+bool TestBackLine();
 
 void setLeftMotorSpeed(int16_t);
 void setRightMotorSpeed(int16_t);
@@ -84,7 +91,12 @@ void handleDriveRev();
 void handleWallPush();
 void handleTurnCW();
 void handleTurnCCW();
+void handleSharpTurnCW();
+void handleSharpTurnCCW();
 void handleStop();
+
+void GlobalStop();
+void ReverseCWTimerExp();
 
 void DEBUG_printStuff();
 
@@ -93,9 +105,9 @@ States_t state;
 
 uint8_t isIRDetected = false;
 
-IntervalTimer IRDetectionTimer;
 IntervalTimer DEBUG_PrintDelayTimer;
 IntervalTimer GlobalStopTimer;
+IntervalTimer ReverseCWTimer;
 
 
 
@@ -105,11 +117,8 @@ IntervalTimer GlobalStopTimer;
 ///////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////
 void setup() {
-  // Initialize the state to orientation
-  state = STATE_ORIENT;
 
   // Timers
-  IRDetectionTimer.begin(IRTimerExp, IR_SIGNAL_INTERVAL);
   GlobalStopTimer.begin(GlobalStop, GLOBAL_TIME_STOP_INTERVAL);
   DEBUG_PrintDelayTimer.begin(DEBUG_printStuff, 100000);
 
@@ -123,30 +132,32 @@ void setup() {
   // Motor Encoder Pins
   pinMode(P_LMOTOR_ENC_A, INPUT);
   pinMode(P_LMOTOR_ENC_B, INPUT);
-  pinMode(P_RMOTOR_ENC_A, INPUT);
-  pinMode(P_RMOTOR_ENC_B, INPUT);
+  // pinMode(P_RMOTOR_ENC_A, INPUT);
+  // pinMode(P_RMOTOR_ENC_B, INPUT);
 
   // Motor Encoder Pin Interrupts
-  attachInterrupt(digitalPinToInterrupt(P_LMOTOR_ENC_A), countRisingEdges, RISING);
-  attachInterrupt(digitalPinToInterrupt(P_LMOTOR_ENC_B), countRisingEdges, RISING);
-  attachInterrupt(digitalPinToInterrupt(P_RMOTOR_ENC_A), countRisingEdges, RISING);
-  attachInterrupt(digitalPinToInterrupt(P_RMOTOR_ENC_B), countRisingEdges, RISING);
+  // attachInterrupt(digitalPinToInterrupt(P_LMOTOR_ENC_A), countRisingEdges, RISING);
+  // attachInterrupt(digitalPinToInterrupt(P_LMOTOR_ENC_B), countRisingEdges, RISING);
+  // attachInterrupt(digitalPinToInterrupt(P_RMOTOR_ENC_A), countRisingEdges, RISING);
+  // attachInterrupt(digitalPinToInterrupt(P_RMOTOR_ENC_B), countRisingEdges, RISING);
 
   // Sensor Pins
   pinMode(P_IR_SENSOR, INPUT);
-  pinMode(P_L_LINE_SENSOR, INPUT);
-  pinMode(P_R_LINE_SENSOR, INPUT);
-  pinMode(P_C_LINE_SENSOR, INPUT);
-
+  pinMode(P_LINE_OUTER, INPUT);
+  pinMode(P_LINE_INNER, INPUT);
+  pinMode(P_BACK_LINE, INPUT);
+  
 
   // Initialize our state to the orientation pass
   state = STATE_ORIENT;
+
 
 }
 
 
 /* Core Function Loop */
 void loop() {
+
 
   // TODO: State machine logic goes in here
 
@@ -168,6 +179,12 @@ void loop() {
     case STATE_TURN_CW:
       handleTurnCW();
       break;
+    case STATE_SHARP_TURN_CW:
+      handleSharpTurnCW();
+      break;
+    case STATE_SHARP_TURN_CCW:
+      handleSharpTurnCCW();
+      break;
     case STATE_TURN_CCW:
       handleTurnCCW();
       break;
@@ -184,6 +201,12 @@ void loop() {
 ///////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////
 
+
+///////////////////////////////////////////////////////
+// Utility Functions
+///////////////////////////////////////////////////////
+
+
 /* Helper functions for driving motors. 
 Accepts a speed in the range of -255-255 (as per 
 limits on the analogWrite command for PWM signal generation) 
@@ -192,46 +215,121 @@ in the opposite direction */
 void setLeftMotorSpeed(int16_t speed) {
 
   if (speed == 0) {
-    analogWrite(IN1, 0);
-    analogWrite(IN2, 0);
+    analogWrite(P_LMOTOR_IN1, 0);
+    analogWrite(P_LMOTOR_IN2, 0);
   }
   else if (speed < 0) {
-    analogWrite(IN1, 0);
-    analogWrite(IN2, -1*speed);
+    analogWrite(P_LMOTOR_IN1, 0);
+    analogWrite(P_LMOTOR_IN2, -1*speed);
   }
   else {
-    analogWrite(IN1, speed);
-    analogWrite(IN2, 0);
+    analogWrite(P_LMOTOR_IN1, speed);
+    analogWrite(P_LMOTOR_IN2, 0);
   }
 }
 
 void setRightMotorSpeed(int16_t speed) {
 
   if (speed == 0) {
-    analogWrite(IN3, 0);
-    analogWrite(IN4, 0);
+    analogWrite(P_RMOTOR_IN1, 0);
+    analogWrite(P_RMOTOR_IN2, 0);
   }
   else if (speed < 0) {
-    analogWrite(IN3, 0);
-    analogWrite(IN4, -1*speed);
+    analogWrite(P_RMOTOR_IN1, 0);
+    analogWrite(P_RMOTOR_IN2, -1*speed);
   }
   else {
-    analogWrite(IN3, speed);
-    analogWrite(IN4, 0);
+    analogWrite(P_RMOTOR_IN1, speed);
+    analogWrite(P_RMOTOR_IN2, 0);
   }
 }
 
 
+///////////////////////////////////////////////////////
+// Event / Service Functions
+///////////////////////////////////////////////////////
 
 /* Universal Event-Checking function used in loop. 
 Tests conditionals implemented in separate functions, which in turn
 trigger callbacks to provide services to events */
 void eventCheck() {
+  // IR Sensing Events
   if (TestForIR()) IRResp();
-  else Serial.println("NOT DETECTED!!!!");
-  if (TestForKey()) keyPressResp();
+ 
+  // Line-Sensing Events for Forward-Drive Line Following
+  if (state == STATE_TURN_CW){
+    if (TestOuterLine()) {
+      ReverseCWTimerExp();
+    }
+  }
+
+  if (state != STATE_ORIENT) {
+    if (TestOuterLine() && TestInnerLine()) state = STATE_DRIVE_FWD;
+    if (TestOuterLine()) state = STATE_TURN_CCW;
+    if (TestInnerLine() && !TestOuterLine()) state = STATE_SHARP_TURN_CCW;
+
+    // LEGACY CODE - GET RID OF THIS
+    // if (TestBackOuterLine() && TestBackInnerLine()) state = STATE_DRIVE_REV;
+    // if (!TestBackOuterLine() && !TestBackInnerLine() && (state == STATE_TURN_CW || state == STATE_SHARP_TURN_CW)) state = STATE_DRIVE_REV;
+
+    if (TestBackLine() && (state != STATE_TURN_CW)) {
+      Serial.println("TIMER STARTED");
+      state = STATE_TURN_CW;
+      //ReverseCWTimer.begin(ReverseCWTimerExp, 500000);      
+      }
+    }
 }
 
+void ReverseCWTimerExp(){
+  Serial.println("TIMER EXPIRED");
+  state = STATE_DRIVE_REV;
+  // setLeftMotorSpeed(0);
+  // setRightMotorSpeed(0);
+  //ReverseCWTimer.end();
+}
+
+
+bool TestOuterLine(){
+  return digitalRead(P_LINE_OUTER);
+}
+
+bool TestInnerLine(){
+  return digitalRead(P_LINE_INNER);
+}
+
+
+bool TestBackLine(){
+  return digitalRead(P_BACK_LINE);
+}
+
+
+
+bool TestForIR(){
+  // Tests if the IR signal is high enough to count as being "detected"
+  if (analogRead(P_IR_SENSOR) >= 800) {
+    return 1;
+  }
+  else {
+    return 0;
+  }
+}
+
+
+void IRResp(){
+  // If event takes place, print to Serial monitor
+  // TODO: Start counting encoders here
+  if (state == STATE_ORIENT) {
+    setLeftMotorSpeed(0);
+    setRightMotorSpeed(0);    
+    state = STATE_DRIVE_REV;
+  }
+}
+
+
+
+///////////////////////////////////////////////////////
+// State-Handling Functions
+///////////////////////////////////////////////////////
 
 
 void handleOrientation() {
@@ -246,27 +344,55 @@ void handleOrientation() {
   are confident of the angular error of our pickup signal, simply start at localized and go from there
   (i.e. if we are fairly sure that the IR signal is only detected when the sensor is nearly directly facing the beacon) */
 
+  setLeftMotorSpeed(NOMINAL_SPEED);
+  setRightMotorSpeed(-NOMINAL_SPEED);
+
 }
+
 
 void handleDriveFwd() {
   /* Handles driving forward. Should just set left and right
   motor speeds to some equal value of speed. Need to calibrate this online */
+  setLeftMotorSpeed(NOMINAL_SPEED);
+  setRightMotorSpeed(NOMINAL_SPEED);
 }
 
 void handleDriveRev() {
   /* Handles driving Backward. Should just set left and right
   motor speeds to some equal value of speed. Need to calibrate this online */
+  setLeftMotorSpeed(NOMINAL_SPEED);
+  setRightMotorSpeed(NOMINAL_SPEED);
 }
 
-void handleDriveCW() {
+void handleTurnCW() {
   /* Handles driving Clockwise. Should be done by setting left motor
-  faster than right to steer differentially. Needs online calibration */
+  forward and right motor too zero. */
+  setLeftMotorSpeed(NOMINAL_SPEED);
+  setRightMotorSpeed(0);
 }
 
-void handleDriveCCW() {
-  /* Handles driving Counter-Clockwise. Should be done by setting right motor
-  faster than left to steer differentially. Needs online calibration */
+void handleSharpTurnCW() {
+  /* Handles SHARP driving Clockwise. Should be done by setting left motor
+  forward and right motor in reverse. */
+  setLeftMotorSpeed(NOMINAL_SPEED);
+  setRightMotorSpeed(-NOMINAL_SPEED/2);
 }
+
+void handleTurnCCW() {
+  /* Handles driving Counter-Clockwise. Should be done by setting right motor
+  forward and left motor in reverse. */
+  setLeftMotorSpeed(-NOMINAL_SPEED);
+  setRightMotorSpeed(0);
+}
+
+void handleSharpTurnCCW() {
+  /* Handles SHARP driving Counter-Clockwise. Should be done by setting left motor
+  forward and right motor in reverse. */
+  setLeftMotorSpeed(-NOMINAL_SPEED);
+  setRightMotorSpeed(NOMINAL_SPEED/2);
+}
+
+
 
 void handleWallPush() {
   /* Handles pushing the wall. TODO: Still need to figure out a) whether
@@ -281,30 +407,15 @@ void handleStop() {
 }
 
 
-bool TestForIR(){
-  // Tests if the IR signal is high enough to count as being "detected"
-  return analogRead(P_IR_SENSOR) >= 300;
-}
-
-void IRResp(){
-  // If event takes place, print to Serial monitor
-  // TODO: Start counting encoders here
-  if (!is IRDetected) {
-    isIRDetected = true;
-    Serial.println("IR DETECTED!");
-  }
-
-  // Reset the timer which runs for the interval after which we consider
-  // the IR beacon to be out of sensing range.
-  // IRDetectionTimer.end();
-  // IRDetectionTimer.begin(IRTimerExp, IR_SIGNAL_INTERVAL);
-}
-
-
-void IRTimerExp(){
-  if (isIRDetected) IRDetectionEnded(); 
-  isIRDetected = false;
-}
+// void IRTimerExp(){
+//   if (isIRDetected) {
+//   Serial.println("NOT DETECTED!!");
+//   isIRDetected = false;
+//   Serial.println(edgeCounter);
+//   edgeCounterRev = edgeCounter / 2;
+//   edgeCounter = 0;
+//   // setMotorSpeed(-150);
+// }
 
 
 void IRDetectionEnded(){

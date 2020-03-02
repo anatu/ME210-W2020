@@ -115,10 +115,6 @@ void LineResp(){
     setLeftMotorSpeed(30);
     setRightMotorSpeed(-30);
   }*/
-  
-
-
-
 }
 
 
@@ -126,10 +122,7 @@ void innerLineResp() {
   setLeftMotorSpeed(255);
   setRightMotorSpeed(-150);
   while(outerLineDetected() == 0) {
-    
   }
-
-
 }
 
 void goForward() {
