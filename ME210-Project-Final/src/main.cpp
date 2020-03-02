@@ -24,7 +24,6 @@
 ///////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////
 // Pin Numbers
-// TODO: Fill these out!
 // Left Motor Pins
 #define P_LMOTOR_IN1 22
 #define P_LMOTOR_IN2 23
@@ -49,6 +48,9 @@
 // #define IR_SIGNAL_INTERVAL 1000000
 // Global 2:10 stopping timer
 #define GLOBAL_TIME_STOP_INTERVAL 130000000
+#define FIRST_WALL_ATTACK_TIME 10000000
+#define SECOND_WALL_ATTACK_TIME 10000000
+
 // Nominal motor speed
 #define NOMINAL_SPEED 250
 
@@ -58,10 +60,17 @@
 // State Definitions
 ///////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////
+// Define the slave states that are used by the meta-states to drive machine action
 typedef enum {
   STATE_ORIENT, STATE_DRIVE_FWD, STATE_DRIVE_REV, STATE_TURN_CW,
   STATE_SHARP_TURN_CW, STATE_TURN_CCW, STATE_SHARP_TURN_CCW, STATE_STOPPED, STATE_PUSHING_WALL
 } States_t;
+
+// Define the hierarchical (master) meta-states that we use to drive either forward or reverse navigation logic depending
+// on whether we are
+typedef enum {
+  METASTATE_ORIENT, METASTATE_FIRST_WALL, METASTATE_SECOND_WALL
+} MetaStates_t;
 
 
 ///////////////////////////////////////////////////////
@@ -95,13 +104,17 @@ void handleSharpTurnCW();
 void handleSharpTurnCCW();
 void handleStop();
 
-void GlobalStop();
 void ReverseCWTimerExp();
+void FirstWallAttackTimerExp();
+void SecondWallAttackTimerExp();
+
+void GlobalStop();
 
 void DEBUG_printStuff();
 
 // Module variables
 States_t state;
+MetaStates_t metaState;
 
 uint8_t isIRDetected = false;
 
@@ -109,6 +122,8 @@ IntervalTimer DEBUG_PrintDelayTimer;
 IntervalTimer GlobalStopTimer;
 IntervalTimer ReverseCWTimer;
 
+IntervalTimer FirstWallTimer;
+IntervalTimer SecondWallTimer;
 
 
 ///////////////////////////////////////////////////////
@@ -150,7 +165,7 @@ void setup() {
 
   // Initialize our state to the orientation pass
   state = STATE_ORIENT;
-
+  metaState = METASTATE_ORIENT;
 
 }
 
@@ -158,11 +173,10 @@ void setup() {
 /* Core Function Loop */
 void loop() {
 
-
-  // TODO: State machine logic goes in here
-
+  // Run global event-check
   eventCheck();
 
+  // State-handler case structure
   switch(state) {
     case STATE_ORIENT:
       handleOrientation();
@@ -253,41 +267,39 @@ void setRightMotorSpeed(int16_t speed) {
 Tests conditionals implemented in separate functions, which in turn
 trigger callbacks to provide services to events */
 void eventCheck() {
-  // IR Sensing Events
-  if (TestForIR()) IRResp();
- 
-  // Line-Sensing Events for Forward-Drive Line Following
-  if (state == STATE_TURN_CW){
-    if (TestOuterLine()) {
-      ReverseCWTimerExp();
-    }
-  }
 
-  if (state != STATE_ORIENT) {
+  // Orientation Pass - Listen for pickup of IR beacon
+  if (metaState == METASTATE_ORIENT) {
+    if (TestForIR()) IRResp();
+  }
+ 
+  // Forward-Movement Line Following (For attacking the first wall)
+  if (metaState == METASTATE_FIRST_WALL) {
     if (TestOuterLine() && TestInnerLine()) state = STATE_DRIVE_FWD;
     if (TestOuterLine()) state = STATE_TURN_CCW;
     if (TestInnerLine() && !TestOuterLine()) state = STATE_SHARP_TURN_CCW;
-
-    // LEGACY CODE - GET RID OF THIS
-    // if (TestBackOuterLine() && TestBackInnerLine()) state = STATE_DRIVE_REV;
-    // if (!TestBackOuterLine() && !TestBackInnerLine() && (state == STATE_TURN_CW || state == STATE_SHARP_TURN_CW)) state = STATE_DRIVE_REV;
-
+  }
+  
+  // Backward-Movement Line Following (For attacking hte second wall)
+  if (metaState == METASTATE_SECOND_WALL) {
     if (TestBackLine() && (state != STATE_TURN_CW)) {
       Serial.println("TIMER STARTED");
       state = STATE_TURN_CW;
       //ReverseCWTimer.begin(ReverseCWTimerExp, 500000);      
       }
+    
+    if (state == STATE_TURN_CW){
+      if (TestOuterLine()) {
+        ReverseCWTimerExp();
+      }
     }
+  }
+
 }
 
 void ReverseCWTimerExp(){
-  Serial.println("TIMER EXPIRED");
   state = STATE_DRIVE_REV;
-  // setLeftMotorSpeed(0);
-  // setRightMotorSpeed(0);
-  //ReverseCWTimer.end();
 }
-
 
 bool TestOuterLine(){
   return digitalRead(P_LINE_OUTER);
@@ -316,15 +328,32 @@ bool TestForIR(){
 
 
 void IRResp(){
-  // If event takes place, print to Serial monitor
-  // TODO: Start counting encoders here
-  if (state == STATE_ORIENT) {
-    setLeftMotorSpeed(0);
-    setRightMotorSpeed(0);    
-    state = STATE_DRIVE_REV;
-  }
+  // Once the IR light is detected, if we are in the
+  // orientation state, switch to attacking the first wall
+  // starting by driving forward
+  setLeftMotorSpeed(0);
+  setRightMotorSpeed(0);    
+  state = STATE_DRIVE_FWD;
+  metaState = METASTATE_FIRST_WALL;
+  FirstWallTimer.begin(FirstWallAttackTimerExp, FIRST_WALL_ATTACK_TIME);  
 }
 
+void FirstWallAttackTimerExp() {
+  /* Once we are done attacking the first wall, switch into the second wall
+  meta-state starting with reverse movement */
+  state = STATE_DRIVE_REV;
+  metaState = METASTATE_SECOND_WALL;
+  // End the first wall attack timer and start the second one
+  FirstWallTimer.end();
+  SecondWallTimer.begin(SecondWallAttackTimerExp, SECOND_WALL_ATTACK_TIME);
+}
+
+void SecondWallAttackTimerExp() {
+  /* Once we are done attacking the sceond wall, stop the motors
+  and terminate the timer */
+  state = STATE_STOPPED;
+  SecondWallTimer.end();
+}
 
 
 ///////////////////////////////////////////////////////
