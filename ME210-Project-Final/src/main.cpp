@@ -41,7 +41,8 @@
 #define P_IR_SENSOR A2
 #define P_LINE_OUTER 11
 #define P_LINE_INNER 12
-#define P_BACK_LINE 7
+#define P_BACK_LINE_OUTER 7
+#define P_BACK_LINE_INNER 10
 #define P_LED 5
 
 // Other Constants
@@ -49,11 +50,11 @@
 // #define IR_SIGNAL_INTERVAL 1000000
 // Global 2:10 stopping timer
 #define GLOBAL_TIME_STOP_INTERVAL 130000000
-#define FIRST_WALL_ATTACK_TIME 3000000
+#define FIRST_WALL_ATTACK_TIME 7000000
 #define SECOND_WALL_ATTACK_TIME 60000000
 
 // Nominal motor speed
-#define NOMINAL_SPEED 240
+#define NOMINAL_SPEED 220
 
 
 ///////////////////////////////////////////////////////
@@ -89,7 +90,8 @@ void IRDetectionEnded();
 
 bool TestOuterLine();
 bool TestInnerLine();
-bool TestBackLine();
+bool TestBackLineOuter();
+bool TestBackLineInner();
 
 void setLeftMotorSpeed(int16_t);
 void setRightMotorSpeed(int16_t);
@@ -161,7 +163,8 @@ void setup() {
   pinMode(P_IR_SENSOR, INPUT);
   pinMode(P_LINE_OUTER, INPUT);
   pinMode(P_LINE_INNER, INPUT);
-  pinMode(P_BACK_LINE, INPUT);
+  pinMode(P_BACK_LINE_OUTER, INPUT);
+  pinMode(P_BACK_LINE_INNER, INPUT);
   
 
   // Initialize our state to the orientation pass
@@ -287,27 +290,42 @@ void eventCheck() {
       }   
     }
   }
-  
+
+
   // Backward-Movement Line Following (For attacking the second wall)
   if (metaState == METASTATE_SECOND_WALL) {
-    if (TestBackLine() && (state != STATE_TURN_CW)) {
-      state = STATE_TURN_CW;
-      }
-    
-    if (state == STATE_TURN_CW){
-      if (TestOuterLine()) {
-        ReverseCWTimerExp();
-      }
-    }
-
-    if (TestInnerLine()) {
-      setLeftMotorSpeed(255);
-      setRightMotorSpeed(255);
-      while (!TestBackLine()) {        
-      }
-      state = STATE_TURN_CW;
+    if (!TestBackLineInner() && !TestBackLineOuter()) state = STATE_DRIVE_REV;
+    if (TestBackLineOuter()) state = STATE_TURN_CW;
+    if (TestBackLineInner() && TestBackLineOuter()) state = STATE_TURN_CW;
+    if (TestBackLineInner() && !TestBackLineOuter()) {
+      state = STATE_SHARP_TURN_CW;
+      setRightMotorSpeed(-255);
+      setLeftMotorSpeed(150);
+      while (!TestBackLineOuter()) {        
+      }   
     }
   }
+
+  // Backward-Movement Line Following (For attacking the second wall)
+  // if (metaState == METASTATE_SECOND_WALL) {
+  //   if (TestBackLine() && (state != STATE_TURN_CW)) {
+  //     state = STATE_TURN_CW;
+  //     }
+    
+  //   if (state == STATE_TURN_CW){
+  //     if (TestOuterLine()) {
+  //       ReverseCWTimerExp();
+  //     }
+  //   }
+
+  //   if (TestInnerLine()) {
+  //     setLeftMotorSpeed(255);
+  //     setRightMotorSpeed(255);
+  //     while (!TestBackLine()) {        
+  //     }
+  //     state = STATE_TURN_CW;
+  //   }
+  // }
 
 }
 
@@ -324,15 +342,18 @@ bool TestInnerLine(){
 }
 
 
-bool TestBackLine(){
-  return digitalRead(P_BACK_LINE);
+bool TestBackLineOuter(){
+  return digitalRead(P_BACK_LINE_OUTER);
 }
 
+bool TestBackLineInner(){
+  return digitalRead(P_BACK_LINE_INNER);
+}
 
 
 bool TestForIR(){
   // Tests if the IR signal is high enough to count as being "detected"
-  if (analogRead(P_IR_SENSOR) >= 800) {
+  if (analogRead(P_IR_SENSOR) >= 1000) {
     return 1;
   }
   else {
@@ -357,24 +378,19 @@ void FirstWallAttackTimerExp() {
   // Serial.println("TIMER EXPIRED!");
   /* Once we are done attacking the first wall, switch into the second wall
   meta-state starting with reverse movement */
-  
-  if (metaState == METASTATE_FIRST_WALL) {
-    state = STATE_DRIVE_REV;
-    metaState = METASTATE_SECOND_WALL;
-    // End the first wall attack timer and start the second one
-    FirstWallTimer.end();
-    SecondWallTimer.begin(SecondWallAttackTimerExp, SECOND_WALL_ATTACK_TIME);
-  }
+  FirstWallTimer.end();
+  state = STATE_DRIVE_REV;
+  metaState = METASTATE_SECOND_WALL;
+  // End the first wall attack timer and start the second one
+  SecondWallTimer.begin(SecondWallAttackTimerExp, SECOND_WALL_ATTACK_TIME);
 }
 
 void SecondWallAttackTimerExp() {
   /* Once we are done attacking the sceond wall, stop the motors
   and terminate the timer */
-  if (metaState == METASTATE_SECOND_WALL) {
-    state = STATE_STOPPED;
-    metaState = METASTATE_END;
-    SecondWallTimer.end();
-  }
+  state = STATE_STOPPED;
+  metaState = METASTATE_END;
+  SecondWallTimer.end();
 }
 
 
@@ -418,15 +434,17 @@ void handleDriveRev() {
 void handleTurnCW() {
   /* Handles driving Clockwise. Should be done by setting left motor
   forward and right motor too zero. */
-  setLeftMotorSpeed(NOMINAL_SPEED);
-  setRightMotorSpeed(40);
+  // setLeftMotorSpeed(NOMINAL_SPEED);
+  // setRightMotorSpeed(40);
+  setLeftMotorSpeed(0);
+  setRightMotorSpeed(-NOMINAL_SPEED);
 }
 
 void handleSharpTurnCW() {
   /* Handles SHARP driving Clockwise. Should be done by setting left motor
   forward and right motor in reverse. */
-  setLeftMotorSpeed(NOMINAL_SPEED);
-  setRightMotorSpeed(-NOMINAL_SPEED/2);
+  setLeftMotorSpeed(NOMINAL_SPEED/2);
+  setRightMotorSpeed(-NOMINAL_SPEED);
 }
 
 void handleTurnCCW() {
